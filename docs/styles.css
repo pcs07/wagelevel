@@ -208,7 +208,8 @@ table {
 
 .compare-controls input {
   width: 100%;
-  padding: 12px 14px;
+  height: 52px;
+  padding: 0 14px;
   border-radius: 14px;
   border: 1px solid rgba(23, 34, 36, 0.12);
   background: rgba(255, 255, 255, 0.78);
@@ -217,7 +218,7 @@ table {
 }
 
 .compare-controls button {
-  height: 48px;
+  height: 52px;
   padding: 0 18px;
   border: 0;
   border-radius: 14px;
@@ -231,6 +232,11 @@ table {
 .compare-controls button:disabled {
   opacity: 0.6;
   cursor: default;
+}
+
+.compare-controls input:focus {
+  outline: 2px solid rgba(15, 118, 110, 0.18);
+  border-color: rgba(15, 118, 110, 0.4);
 }
 
 .compare-status {

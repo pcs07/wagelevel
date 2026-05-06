@@ -9,6 +9,8 @@ const state = {
   currentRows: [],
   geoCache: new Map(),
   wageCache: new Map(),
+  addressSuggestionCache: new Map(),
+  addressSuggestionTimers: new Map(),
 };
 
 const palette = {
@@ -80,6 +82,11 @@ const addressInputs = [
   document.getElementById("address-2"),
   document.getElementById("address-3"),
 ];
+const addressSuggestionLists = [
+  document.getElementById("address-1-suggestions"),
+  document.getElementById("address-2-suggestions"),
+  document.getElementById("address-3-suggestions"),
+];
 const compareAddressesButton = document.getElementById("compare-addresses");
 const compareStatus = document.getElementById("compare-status");
 const addressCompareBody = document.getElementById("address-compare-body");
@@ -132,6 +139,68 @@ async function getJson(url) {
     throw new Error(`Request failed: ${url}`);
   }
   return response.json();
+}
+
+function setAddressSuggestions(index, suggestions) {
+  const datalist = addressSuggestionLists[index];
+  datalist.innerHTML = "";
+  suggestions.forEach((suggestion) => {
+    const option = document.createElement("option");
+    option.value = suggestion;
+    datalist.appendChild(option);
+  });
+}
+
+async function fetchAddressSuggestions(query) {
+  const normalized = query.trim();
+  if (normalized.length < 6) {
+    return [];
+  }
+
+  if (state.addressSuggestionCache.has(normalized)) {
+    return state.addressSuggestionCache.get(normalized);
+  }
+
+  const url = new URL("https://geocoding.geo.census.gov/geocoder/geographies/onelineaddress");
+  url.searchParams.set("address", normalized);
+  url.searchParams.set("benchmark", "Public_AR_Current");
+  url.searchParams.set("vintage", "Current_Current");
+  url.searchParams.set("format", "json");
+
+  const response = await fetch(url);
+  if (!response.ok) {
+    return [];
+  }
+
+  const payload = await response.json();
+  const suggestions = (payload?.result?.addressMatches || [])
+    .map((match) => match.matchedAddress)
+    .filter(Boolean)
+    .slice(0, 5);
+
+  state.addressSuggestionCache.set(normalized, suggestions);
+  return suggestions;
+}
+
+function scheduleAddressSuggestions(index) {
+  const query = addressInputs[index].value.trim();
+  if (state.addressSuggestionTimers.has(index)) {
+    clearTimeout(state.addressSuggestionTimers.get(index));
+  }
+
+  if (query.length < 6) {
+    setAddressSuggestions(index, []);
+    return;
+  }
+
+  const timer = setTimeout(async () => {
+    const suggestions = await fetchAddressSuggestions(query);
+    if (addressInputs[index].value.trim() === query) {
+      setAddressSuggestions(index, suggestions);
+    }
+  }, 220);
+
+  state.addressSuggestionTimers.set(index, timer);
 }
 
 async function loadYearGeography(year) {
@@ -590,6 +659,9 @@ async function init() {
   });
 
   compareAddressesButton.addEventListener("click", compareAddresses);
+  addressInputs.forEach((input, index) => {
+    input.addEventListener("input", () => scheduleAddressSuggestions(index));
+  });
 
   await loadMapData();
 }
