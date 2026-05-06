@@ -1,9 +1,9 @@
 OFLC_Wages_*.zip
 OFLC_Wages_2025-26_Updated/
-data/
-output/
-national_county.txt
-us-counties.geojson
+/data/
+/output/
+/national_county.txt
+/us-counties.geojson
 
 # macOS
 .DS_Store
@@ -11,3 +11,8 @@ us-counties.geojson
 # Python
 __pycache__/
 *.pyc
+
+# Keep GitHub Pages assets
+!docs/data/
+!docs/data/**
+!docs/us-counties.geojson
