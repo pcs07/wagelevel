@@ -176,6 +176,68 @@ table {
   overflow: auto;
 }
 
+.compare-note,
+.compare-status {
+  color: var(--muted);
+}
+
+.compare-note {
+  margin: 0 0 16px;
+  max-width: 70ch;
+}
+
+.compare-controls {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+  gap: 12px;
+  align-items: end;
+  margin-bottom: 14px;
+}
+
+.compare-controls label {
+  display: block;
+}
+
+.compare-controls span {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.compare-controls input {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(23, 34, 36, 0.12);
+  background: rgba(255, 255, 255, 0.78);
+  color: var(--ink);
+  font: inherit;
+}
+
+.compare-controls button {
+  height: 48px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--accent);
+  color: white;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.compare-controls button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.compare-status {
+  min-height: 1.4em;
+  margin: 0 0 12px;
+}
+
 table {
   width: 100%;
   border-collapse: collapse;
@@ -210,6 +272,10 @@ tbody td:first-child {
 
   .controls .wide {
     grid-column: span 1;
+  }
+
+  .compare-controls {
+    grid-template-columns: 1fr;
   }
 
   .chart.map {

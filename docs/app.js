@@ -75,6 +75,14 @@ const sourceSelect = document.getElementById("source-select");
 const metricSelect = document.getElementById("metric-select");
 const jobCodeInput = document.getElementById("job-code-input");
 const jobCodes = document.getElementById("job-codes");
+const addressInputs = [
+  document.getElementById("address-1"),
+  document.getElementById("address-2"),
+  document.getElementById("address-3"),
+];
+const compareAddressesButton = document.getElementById("compare-addresses");
+const compareStatus = document.getElementById("compare-status");
+const addressCompareBody = document.getElementById("address-compare-body");
 const selectionTitle = document.getElementById("selection-title");
 const selectionSubtitle = document.getElementById("selection-subtitle");
 const countyCount = document.getElementById("county-count");
@@ -400,12 +408,124 @@ function renderTable(rows) {
     });
 }
 
+async function geocodeAddress(address) {
+  const url = new URL("https://geocoding.geo.census.gov/geocoder/geographies/onelineaddress");
+  url.searchParams.set("address", address);
+  url.searchParams.set("benchmark", "Public_AR_Current");
+  url.searchParams.set("vintage", "Current_Current");
+  url.searchParams.set("format", "json");
+
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error("Address lookup failed.");
+  }
+
+  const payload = await response.json();
+  const match = payload?.result?.addressMatches?.[0];
+  const county = match?.geographies?.Counties?.[0];
+  if (!match || !county?.GEOID) {
+    return null;
+  }
+
+  return {
+    matchedAddress: match.matchedAddress,
+    countyFips: county.GEOID,
+    countyName: county.NAME || "",
+    state: county.STATE || "",
+  };
+}
+
+function renderAddressComparison(results) {
+  addressCompareBody.innerHTML = "";
+
+  results.forEach((result) => {
+    const tr = document.createElement("tr");
+
+    if (result.error) {
+      tr.innerHTML = `
+        <td>${result.input}</td>
+        <td colspan="7">${result.error}</td>
+      `;
+      addressCompareBody.appendChild(tr);
+      return;
+    }
+
+    tr.innerHTML = `
+      <td>${result.matchedAddress}</td>
+      <td>${result.row.county_name}</td>
+      <td>${result.row.state_ab}</td>
+      <td>${result.row.area_name}</td>
+      <td>${formatMoney(result.row.level1)}</td>
+      <td>${formatMoney(result.row.level2)}</td>
+      <td>${formatMoney(result.row.level3)}</td>
+      <td>${formatMoney(result.row.level4)}</td>
+    `;
+    addressCompareBody.appendChild(tr);
+  });
+}
+
+async function compareAddresses() {
+  const addresses = addressInputs
+    .map((input) => input.value.trim())
+    .filter(Boolean)
+    .slice(0, 3);
+
+  if (!addresses.length) {
+    compareStatus.textContent = "Enter at least one address to compare.";
+    addressCompareBody.innerHTML = "";
+    return;
+  }
+
+  compareAddressesButton.disabled = true;
+  compareStatus.textContent = "Resolving addresses...";
+
+  try {
+    const results = await Promise.all(
+      addresses.map(async (input) => {
+        try {
+          const geo = await geocodeAddress(input);
+          if (!geo) {
+            return { input, error: "No county match found for this address." };
+          }
+
+          const row = state.currentRows.find((item) => item.county_fips === geo.countyFips);
+          if (!row) {
+            return {
+              input,
+              matchedAddress: geo.matchedAddress,
+              error: "County found, but no wage row is available for the current year/source/SOC code.",
+            };
+          }
+
+          return {
+            input,
+            matchedAddress: geo.matchedAddress,
+            row,
+          };
+        } catch (error) {
+          return {
+            input,
+            error: error.message || "Address lookup failed.",
+          };
+        }
+      })
+    );
+
+    renderAddressComparison(results);
+    compareStatus.textContent = `Compared ${results.length} address${results.length === 1 ? "" : "es"} for ${selectedOccupationLabel()}.`;
+  } finally {
+    compareAddressesButton.disabled = false;
+  }
+}
+
 async function loadMapData() {
   const [geoRows, wageData] = await Promise.all([
     loadYearGeography(state.selectedYear),
     loadWages(state.selectedYear, state.selectedSource),
   ]);
   state.currentRows = buildCountyRows(geoRows, wageData, state.selectedSocCode);
+  compareStatus.textContent = "";
+  addressCompareBody.innerHTML = "";
   syncStateOptions(state.currentRows);
   const rows = visibleRows(state.currentRows);
   updateSummary(rows);
@@ -468,6 +588,8 @@ async function init() {
     jobCodeInput.value = selectedOccupationLabel();
     await loadMapData();
   });
+
+  compareAddressesButton.addEventListener("click", compareAddresses);
 
   await loadMapData();
 }

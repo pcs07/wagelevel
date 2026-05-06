@@ -119,6 +119,53 @@
             </table>
           </div>
         </section>
+
+        <section class="panel panel-wide">
+          <div class="panel-header">
+            <div>
+              <p class="panel-kicker">Address Compare</p>
+              <h3>Compare up to three addresses</h3>
+            </div>
+          </div>
+          <p class="compare-note">
+            Enter up to three U.S. addresses. The app resolves each address to its
+            county and compares the selected SOC code, year, source, and wage level
+            across those counties.
+          </p>
+          <div class="compare-controls">
+            <label>
+              <span>Address 1</span>
+              <input id="address-1" type="text" placeholder="1600 Amphitheatre Pkwy, Mountain View, CA" />
+            </label>
+            <label>
+              <span>Address 2</span>
+              <input id="address-2" type="text" placeholder="1 Apple Park Way, Cupertino, CA" />
+            </label>
+            <label>
+              <span>Address 3</span>
+              <input id="address-3" type="text" placeholder="11 Times Sq, New York, NY" />
+            </label>
+            <button id="compare-addresses" type="button">Compare addresses</button>
+          </div>
+          <p id="compare-status" class="compare-status"></p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Address</th>
+                  <th>County</th>
+                  <th>State</th>
+                  <th>Area</th>
+                  <th>Level 1</th>
+                  <th>Level 2</th>
+                  <th>Level 3</th>
+                  <th>Level 4</th>
+                </tr>
+              </thead>
+              <tbody id="address-compare-body"></tbody>
+            </table>
+          </div>
+        </section>
       </main>
     </div>
 
