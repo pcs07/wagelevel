@@ -141,6 +141,37 @@ async function getJson(url) {
   return response.json();
 }
 
+function getJsonp(url) {
+  return new Promise((resolve, reject) => {
+    const callbackName = `censusJsonp_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    const script = document.createElement("script");
+    const timer = setTimeout(() => {
+      cleanup();
+      reject(new Error("Address lookup timed out."));
+    }, 10000);
+
+    function cleanup() {
+      clearTimeout(timer);
+      delete window[callbackName];
+      script.remove();
+    }
+
+    window[callbackName] = (payload) => {
+      cleanup();
+      resolve(payload);
+    };
+
+    script.onerror = () => {
+      cleanup();
+      reject(new Error("Failed to fetch address suggestions."));
+    };
+
+    const separator = url.includes("?") ? "&" : "?";
+    script.src = `${url}${separator}format=jsonp&callback=${callbackName}`;
+    document.body.appendChild(script);
+  });
+}
+
 function setAddressSuggestions(index, suggestions) {
   const datalist = addressSuggestionLists[index];
   datalist.innerHTML = "";
@@ -161,18 +192,10 @@ async function fetchAddressSuggestions(query) {
     return state.addressSuggestionCache.get(normalized);
   }
 
-  const url = new URL("https://geocoding.geo.census.gov/geocoder/geographies/onelineaddress");
+  const url = new URL("https://geocoding.geo.census.gov/geocoder/locations/onelineaddress");
   url.searchParams.set("address", normalized);
   url.searchParams.set("benchmark", "Public_AR_Current");
-  url.searchParams.set("vintage", "Current_Current");
-  url.searchParams.set("format", "json");
-
-  const response = await fetch(url);
-  if (!response.ok) {
-    return [];
-  }
-
-  const payload = await response.json();
+  const payload = await getJsonp(url.toString());
   const suggestions = (payload?.result?.addressMatches || [])
     .map((match) => match.matchedAddress)
     .filter(Boolean)
@@ -482,14 +505,7 @@ async function geocodeAddress(address) {
   url.searchParams.set("address", address);
   url.searchParams.set("benchmark", "Public_AR_Current");
   url.searchParams.set("vintage", "Current_Current");
-  url.searchParams.set("format", "json");
-
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error("Address lookup failed.");
-  }
-
-  const payload = await response.json();
+  const payload = await getJsonp(url.toString());
   const match = payload?.result?.addressMatches?.[0];
   const county = match?.geographies?.Counties?.[0];
   if (!match || !county?.GEOID) {
