@@ -218,7 +218,7 @@ function setAddressSuggestions(index, suggestions) {
 
 async function fetchAddressSuggestions(query) {
   const normalized = query.trim();
-  if (normalized.length < 6) {
+  if (normalized.length < 2) {
     return [];
   }
 
@@ -231,6 +231,7 @@ async function fetchAddressSuggestions(query) {
   url.searchParams.set("countryCode", "USA");
   url.searchParams.set("maxSuggestions", "5");
   url.searchParams.set("text", normalized);
+  url.searchParams.set("category", "Address,Populated Place,Postal");
   const payload = await getExternalJson(url.toString());
   const suggestions = (payload || [])
     .suggestions?.map((match) => match.text)
@@ -247,7 +248,7 @@ function scheduleAddressSuggestions(index) {
     clearTimeout(state.addressSuggestionTimers.get(index));
   }
 
-  if (query.length < 6) {
+  if (query.length < 2) {
     setAddressSuggestions(index, []);
     return;
   }
@@ -598,6 +599,7 @@ async function geocodeAddress(address) {
   );
   url.searchParams.set("f", "pjson");
   url.searchParams.set("SingleLine", address);
+  url.searchParams.set("category", "Address,Populated Place,Postal");
   url.searchParams.set("outFields", "Match_addr,RegionAbbr");
   url.searchParams.set("maxLocations", "1");
   url.searchParams.set("sourceCountry", "USA");
