@@ -9,6 +9,7 @@ const state = {
   currentRows: [],
   geoCache: new Map(),
   wageCache: new Map(),
+  countyFeaturesById: new Map(),
   addressSuggestionCache: new Map(),
   addressSuggestionTimers: new Map(),
 };
@@ -141,9 +142,25 @@ async function getJson(url) {
   return response.json();
 }
 
-function getJsonp(url) {
+async function getExternalJson(url, callbackParam = "callback") {
+  try {
+    const response = await fetch(url, {
+      headers: {
+        Accept: "application/json",
+      },
+    });
+    if (!response.ok) {
+      throw new Error(`External request failed: ${response.status}`);
+    }
+    return response.json();
+  } catch (fetchError) {
+    return getJsonp(url, callbackParam);
+  }
+}
+
+function getJsonp(url, callbackParam = "callback") {
   return new Promise((resolve, reject) => {
-    const callbackName = `censusJsonp_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    const callbackName = `jsonp_${Date.now()}_${Math.random().toString(36).slice(2)}`;
     const script = document.createElement("script");
     const timer = setTimeout(() => {
       cleanup();
@@ -163,13 +180,30 @@ function getJsonp(url) {
 
     script.onerror = () => {
       cleanup();
-      reject(new Error("Failed to fetch address suggestions."));
+      reject(new Error("Address service is unavailable right now."));
     };
 
     const separator = url.includes("?") ? "&" : "?";
-    script.src = `${url}${separator}format=jsonp&callback=${callbackName}`;
+    script.src = `${url}${separator}${callbackParam}=${callbackName}`;
     document.body.appendChild(script);
   });
+}
+
+function normalizeCountyName(name) {
+  return (name || "")
+    .toLowerCase()
+    .replace(/\./g, "")
+    .replace(/'/g, "")
+    .replace(/-/g, " ")
+    .replace(/\bsaint\b/g, "st")
+    .replace(/\bcounty\b/g, "")
+    .replace(/\bparish\b/g, "")
+    .replace(/\bborough\b/g, "")
+    .replace(/\bcity and borough\b/g, "")
+    .replace(/\bcensus area\b/g, "")
+    .replace(/\bmunicipio\b/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function setAddressSuggestions(index, suggestions) {
@@ -192,12 +226,14 @@ async function fetchAddressSuggestions(query) {
     return state.addressSuggestionCache.get(normalized);
   }
 
-  const url = new URL("https://geocoding.geo.census.gov/geocoder/locations/onelineaddress");
-  url.searchParams.set("address", normalized);
-  url.searchParams.set("benchmark", "Public_AR_Current");
-  const payload = await getJsonp(url.toString());
-  const suggestions = (payload?.result?.addressMatches || [])
-    .map((match) => match.matchedAddress)
+  const url = new URL("https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/suggest");
+  url.searchParams.set("f", "pjson");
+  url.searchParams.set("countryCode", "USA");
+  url.searchParams.set("maxSuggestions", "5");
+  url.searchParams.set("text", normalized);
+  const payload = await getExternalJson(url.toString());
+  const suggestions = (payload || [])
+    .suggestions?.map((match) => match.text)
     .filter(Boolean)
     .slice(0, 5);
 
@@ -217,9 +253,15 @@ function scheduleAddressSuggestions(index) {
   }
 
   const timer = setTimeout(async () => {
-    const suggestions = await fetchAddressSuggestions(query);
-    if (addressInputs[index].value.trim() === query) {
-      setAddressSuggestions(index, suggestions);
+    try {
+      const suggestions = await fetchAddressSuggestions(query);
+      if (addressInputs[index].value.trim() === query) {
+        setAddressSuggestions(index, suggestions);
+      }
+    } catch (error) {
+      if (addressInputs[index].value.trim() === query) {
+        setAddressSuggestions(index, []);
+      }
     }
   }, 220);
 
@@ -500,23 +542,80 @@ function renderTable(rows) {
     });
 }
 
+function pointInRing(point, ring) {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i, i += 1) {
+    const xi = ring[i][0];
+    const yi = ring[i][1];
+    const xj = ring[j][0];
+    const yj = ring[j][1];
+    const intersects =
+      yi > point[1] !== yj > point[1] &&
+      point[0] < ((xj - xi) * (point[1] - yi)) / (yj - yi || Number.EPSILON) + xi;
+    if (intersects) inside = !inside;
+  }
+  return inside;
+}
+
+function pointInPolygon(point, polygon) {
+  if (!polygon.length || !pointInRing(point, polygon[0])) {
+    return false;
+  }
+  for (let i = 1; i < polygon.length; i += 1) {
+    if (pointInRing(point, polygon[i])) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function featureContainsPoint(feature, point) {
+  const geometry = feature?.geometry;
+  if (!geometry) return false;
+  if (geometry.type === "Polygon") {
+    return pointInPolygon(point, geometry.coordinates);
+  }
+  if (geometry.type === "MultiPolygon") {
+    return geometry.coordinates.some((polygon) => pointInPolygon(point, polygon));
+  }
+  return false;
+}
+
+function countyFeatureForPoint(lon, lat) {
+  const point = [lon, lat];
+  for (const row of state.currentRows) {
+    const feature = state.countyFeaturesById.get(row.county_fips);
+    if (feature && featureContainsPoint(feature, point)) {
+      return feature;
+    }
+  }
+  return null;
+}
+
 async function geocodeAddress(address) {
-  const url = new URL("https://geocoding.geo.census.gov/geocoder/geographies/onelineaddress");
-  url.searchParams.set("address", address);
-  url.searchParams.set("benchmark", "Public_AR_Current");
-  url.searchParams.set("vintage", "Current_Current");
-  const payload = await getJsonp(url.toString());
-  const match = payload?.result?.addressMatches?.[0];
-  const county = match?.geographies?.Counties?.[0];
-  if (!match || !county?.GEOID) {
+  const url = new URL(
+    "https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/findAddressCandidates"
+  );
+  url.searchParams.set("f", "pjson");
+  url.searchParams.set("SingleLine", address);
+  url.searchParams.set("outFields", "Match_addr,RegionAbbr");
+  url.searchParams.set("maxLocations", "1");
+  url.searchParams.set("sourceCountry", "USA");
+  const payload = await getExternalJson(url.toString());
+  const match = payload?.candidates?.[0];
+  const location = match?.location;
+  if (!match || !location) {
+    return null;
+  }
+
+  const feature = countyFeatureForPoint(location.x, location.y);
+  if (!feature) {
     return null;
   }
 
   return {
-    matchedAddress: match.matchedAddress,
-    countyFips: county.GEOID,
-    countyName: county.NAME || "",
-    state: county.STATE || "",
+    matchedAddress: match.address || match.attributes?.Match_addr || address,
+    countyFips: feature.id,
   };
 }
 
@@ -626,6 +725,9 @@ async function init() {
   ]);
   state.meta = meta;
   state.geojson = geojson;
+  state.countyFeaturesById = new Map(
+    (geojson.features || []).map((feature) => [String(feature.id).padStart(5, "0"), feature])
+  );
   populateControls();
 
   yearSelect.addEventListener("change", async (event) => {
