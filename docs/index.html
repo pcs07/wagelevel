@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OFLC County Wage Map</title>
+    <link rel="stylesheet" href="./styles.css" />
+    <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="hero">
+        <div>
+          <p class="eyebrow">OFLC County Wage Map</p>
+          <h1>County-level view of prevailing wage levels by year and SOC code.</h1>
+          <p class="lede">
+            Counties inherit the local wage-area value published by OFLC. Select a
+            wage year, job code, source, and wage level to inspect annual wages on
+            the yearly map.
+          </p>
+        </div>
+        <div class="hero-note">
+          <p class="note-label">Scope</p>
+          <p>
+            This dashboard is built from official FLAG wage downloads from
+            `2019-2020` through `2025-2026`, current as of August 20, 2025.
+          </p>
+        </div>
+      </header>
+
+      <section class="controls">
+        <label>
+          <span>Wage year</span>
+          <select id="year-select"></select>
+        </label>
+        <label>
+          <span>State</span>
+          <select id="state-select"></select>
+        </label>
+        <label>
+          <span>Source</span>
+          <select id="source-select"></select>
+        </label>
+        <label>
+          <span>Wage level</span>
+          <select id="metric-select">
+            <option value="level1">Wage Level 1 Annual</option>
+            <option value="level2">Wage Level 2 Annual</option>
+            <option value="level3">Wage Level 3 Annual</option>
+            <option value="level4">Wage Level 4 Annual</option>
+          </select>
+        </label>
+        <label class="wide">
+          <span>Job code</span>
+          <input id="job-code-input" list="job-codes" placeholder="15-1252 | Software Developers" />
+          <datalist id="job-codes"></datalist>
+        </label>
+      </section>
+
+      <section class="summary">
+        <article class="summary-card">
+          <p class="summary-label">Selection</p>
+          <h2 id="selection-title"></h2>
+          <p id="selection-subtitle"></p>
+        </article>
+        <article class="summary-card compact">
+          <p class="summary-label">County rows</p>
+          <strong id="county-count">0</strong>
+        </article>
+        <article class="summary-card compact">
+          <p class="summary-label">Local wage areas</p>
+          <strong id="area-count">0</strong>
+        </article>
+        <article class="summary-card compact">
+          <p class="summary-label">Coverage</p>
+          <strong id="coverage-count">0%</strong>
+        </article>
+      </section>
+
+      <main class="dashboard-grid">
+        <section class="panel panel-wide">
+          <div class="panel-header">
+            <div>
+              <p class="panel-kicker">Map</p>
+              <h3>County choropleth</h3>
+            </div>
+          </div>
+          <div id="county-map" class="chart map"></div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-header">
+            <div>
+              <p class="panel-kicker">Distribution</p>
+              <h3>Wage distribution</h3>
+            </div>
+          </div>
+          <div id="histogram" class="chart"></div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-header">
+            <div>
+              <p class="panel-kicker">Top counties</p>
+              <h3>Highest values in the current view</h3>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>County</th>
+                  <th>State</th>
+                  <th>Area</th>
+                  <th>Value</th>
+                </tr>
+              </thead>
+              <tbody id="top-county-table"></tbody>
+            </table>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
